@@ -144,13 +144,24 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 **Gamification, C.** Система повинна нараховувати бали впливу за кожне
 замовлення в статусі `paid` та зменшувати баланс на 2% щоденно.
 
+### SRS-FUN-19
+
+**Administration, S.** Система повинна дозволяти адміністратору змінювати
+параметри Price Decay (`k`, відношення `P_min / P_0`) для закладу;
+нові параметри повинні застосовуватися з наступного циклу перерахунку.
+
+### SRS-FUN-20
+
+**Realtime, M.** Система повинна відхиляти WebSocket-з'єднання без
+валідного access JWT під час handshake.
+
 ## 4. Нефункціональні вимоги (NFRs Matrix)
 
 | ID | Категорія | Вимога | Межа |
 |---|---|---|---|
 | <a id="srs-nfr-perf-01"></a>SRS-NFR-PERF-01 | Продуктивність | Час відгуку `GET /lots/nearby` | p95 ≤ 150 мс при 300 RPS протягом 10 хв |
 | <a id="srs-nfr-perf-02"></a>SRS-NFR-PERF-02 | Продуктивність | Час відгуку `POST /reservations` | p95 ≤ 250 мс при 200 одночасних VU на один лот |
-| <a id="srs-nfr-perf-03"></a>SRS-NFR-PERF-03 | Реальний час | Затримка від запису ціни до отримання клієнтом | p95 ≤ 2 с |
+| <a id="srs-nfr-perf-03"></a>SRS-NFR-PERF-03 | Реальний час | Затримка від запису ціни до отримання клієнтом | p95 ≤ 2 с при 5 000 з'єднань і 50 подіях/с |
 | <a id="srs-nfr-perf-04"></a>SRS-NFR-PERF-04 | Продуктивність | Цикл перерахунку цін | ≤ 10 с для 10 000 активних лотів |
 | <a id="srs-nfr-scal-01"></a>SRS-NFR-SCAL-01 | Масштабованість | Одночасні WebSocket-з'єднання | ≥ 5 000 на 2 інстанси Realtime Gateway |
 | <a id="srs-nfr-scal-02"></a>SRS-NFR-SCAL-02 | Масштабованість | Stateless-сервіси | запуск N реплік без зміни коду; стан — у PostgreSQL/Redis |
@@ -184,6 +195,9 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 | SRS-FUN-13, SRS-FUN-14 | Test | e2e-тест: ордер із порогом виконано протягом ≤ 5 с після перерахунку |
 | SRS-FUN-15, SRS-NFR-PERF-03, SRS-NFR-SCAL-01 | Test | k6 (модуль `k6/experimental/websockets`): 5 000 з'єднань, вимірювання різниці міток часу |
 | SRS-FUN-16 | Test | k6: 120 запитів/хв → ≥ 20 відповідей 429 |
+| SRS-FUN-18 | Test | Jest: нарахування балів за `paid`; щоденний decay з fake timers |
+| SRS-FUN-19 | Test | e2e: зміна `k` адміністратором → нова ціна в наступному циклі; запит без ролі `admin` → 403 |
+| SRS-FUN-20 | Test | Jest + socket.io-client: handshake без токена → `connect_error` |
 | SRS-FUN-17, SRS-NFR-COMP-01 | Inspection | SQL-перевірка відсутності персональних даних після job видалення; рев'ю схеми логів |
 | SRS-NFR-PERF-01 | Test | k6, сценарій `constant-arrival-rate` 300 RPS, 10 хв |
 | SRS-NFR-PERF-04 | Test | бенчмарк Worker на 10 000 згенерованих лотів, метрика `pricing_cycle_duration_seconds` |
@@ -220,4 +234,4 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 | SRS-FUN-09, 10 | CF-5 | B2.1, B2.2 |
 | SRS-FUN-11, 12 | CF-6 | B2.3 |
 | SRS-FUN-13, 14 | CF-7 | B3.3 |
-| SRS-FUN-15 | CF-8 | B3.1, B3.2 |
+| SRS-FUN-15, 20 | CF-8 | B3.1, B3.2 |
