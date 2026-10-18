@@ -163,8 +163,10 @@ C4Component
     Component(events, "EventPublisher", "Port + Redis adapter", "Події lot.stock_updated")
   }
 
-  Rel(gw, guard, "Вхідний запит", "REST / HTTP")
-  Rel(guard, pipe, "Автентифікований запит", "NestJS pipeline")
+  Rel(gw, telemetry, "Вхідний запит", "REST / HTTP")
+  Rel(telemetry, guard, "Запит з correlation-id", "NestJS pipeline")
+  Rel(guard, idem, "Автентифікований запит", "NestJS pipeline")
+  Rel(idem, pipe, "Новий ключ ідемпотентності", "NestJS pipeline")
   Rel(pipe, resCtl, "Валідований DTO", "NestJS pipeline")
   Rel(pipe, loCtl, "Валідований DTO", "NestJS pipeline")
   Rel(gw, payCtl, "Callback LiqPay", "REST / HTTP")
@@ -183,6 +185,7 @@ C4Component
   Rel(payUC, payClient, "verifySignature()", "DI")
   Rel(payUC, orderRepo, "markPaid()", "DI")
   Rel(loUC, orderRepo, "save()", "DI")
+  Rel(reserveUC, filter, "DomainException", "throw / NestJS exception layer")
 
   Rel(unitRepo, db, "SQL", "TCP 5432")
   Rel(orderRepo, db, "SQL", "TCP 5432")
