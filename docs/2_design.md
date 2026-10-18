@@ -61,9 +61,8 @@ C4Container
   System_Ext(pay, "LiqPay (sandbox)")
   System_Ext(push, "Expo Push / FCM")
 
-  Container(mobile, "Mobile App", "React Native, Expo", "Мапа, лоти, кошик, лімітні ордери")
-
-  System_Boundary(b2c, "B2C-підсистема (Docker Compose)") {
+  System_Boundary(b2c, "B2C-підсистема") {
+    Container(mobile, "Mobile App", "React Native, Expo", "Мапа, лоти, кошик, лімітні ордери")
     Container(gw, "API Gateway", "Traefik v3", "TLS 1.3, маршрутизація, rate limiting")
     Container(core, "Core API", "NestJS, TypeScript", "Auth, каталог, геопошук, інтеграція B2B, гейміфікація")
     Container(trading, "Trading Service", "NestJS, TypeScript", "Резервування SKIP LOCKED, замовлення, лімітні ордери, оплата")
@@ -75,7 +74,7 @@ C4Container
   }
 
   Rel(consumer, mobile, "Використовує")
-  Rel(admin, gw, "Адмін-ендпоінти", "REST / HTTPS")
+  Rel(admin, gw, "Адмін-API (Swagger UI), Grafana", "HTTPS")
   Rel(mobile, gw, "API-запити", "REST / HTTPS")
   Rel(mobile, gw, "Підписка на зміни", "WSS")
   Rel(b2b, gw, "Фід лотів", "REST / HTTPS + HMAC")
@@ -83,7 +82,9 @@ C4Container
   Rel(gw, core, "/auth, /lots, /venues, /integration", "REST / HTTP")
   Rel(gw, trading, "/reservations, /orders, /limit-orders, /payments", "REST / HTTP")
   Rel(gw, rt, "/ws", "WebSocket")
+  Rel(gw, obs, "/grafana", "HTTP")
   Rel(core, db, "Читання/запис", "SQL / TCP 5432")
+  Rel(core, redis, "Кеш геопошуку, подія lot.created", "RESP / TCP 6379")
   Rel(trading, db, "Транзакції SKIP LOCKED", "SQL / TCP 5432")
   Rel(worker, db, "Пакетний UPDATE цін, outbox", "SQL / TCP 5432")
   Rel(worker, redis, "Споживання задач, публікація подій", "RESP / TCP 6379")
@@ -94,6 +95,8 @@ C4Container
   Rel(worker, push, "Push про виконання ордера", "REST / HTTPS")
   Rel(obs, core, "Scrape /metrics", "HTTP")
   Rel(obs, trading, "Scrape /metrics", "HTTP")
+  Rel(obs, worker, "Scrape /metrics", "HTTP")
+  Rel(obs, rt, "Scrape /metrics", "HTTP")
 
   UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="1")
 ```
@@ -104,10 +107,10 @@ C4Container
 |---|---|---|---|
 | Mobile App | React Native (Expo) | клієнт для [SRS-FUN-05](./srs.md#srs-fun-05), [SRS-FUN-13](./srs.md#srs-fun-13), [SRS-FUN-15](./srs.md#srs-fun-15) | — |
 | API Gateway | Traefik v3 | [SRS-FUN-16](./srs.md#srs-fun-16), [SRS-NFR-SEC-02](./srs.md#srs-nfr-sec-02) | — |
-| Core API | NestJS | [SRS-FUN-01](./srs.md#srs-fun-01)–[SRS-FUN-06](./srs.md#srs-fun-06), [SRS-FUN-17](./srs.md#srs-fun-17), [SRS-FUN-18](./srs.md#srs-fun-18) | — |
+| Core API | NestJS | [SRS-FUN-01](./srs.md#srs-fun-01)–[SRS-FUN-06](./srs.md#srs-fun-06), [SRS-FUN-17](./srs.md#srs-fun-17)–[SRS-FUN-19](./srs.md#srs-fun-19) | — |
 | Trading Service | NestJS | [SRS-FUN-09](./srs.md#srs-fun-09), [SRS-FUN-11](./srs.md#srs-fun-11), [SRS-FUN-13](./srs.md#srs-fun-13), [SRS-FUN-14](./srs.md#srs-fun-14), [SRS-NFR-CONS-01](./srs.md#srs-nfr-cons-01) | [ADR-001](./adr/0001-choice-of-technology.md) |
 | Pricing Worker | NestJS + BullMQ | [SRS-FUN-07](./srs.md#srs-fun-07), [SRS-FUN-08](./srs.md#srs-fun-08), [SRS-FUN-10](./srs.md#srs-fun-10), [SRS-FUN-12](./srs.md#srs-fun-12), [SRS-NFR-REL-03](./srs.md#srs-nfr-rel-03) | — |
-| Realtime Gateway | NestJS + Socket.IO + Redis adapter | [SRS-FUN-15](./srs.md#srs-fun-15), [SRS-NFR-PERF-03](./srs.md#srs-nfr-perf-03), [SRS-NFR-SCAL-01](./srs.md#srs-nfr-scal-01) | — |
+| Realtime Gateway | NestJS + Socket.IO + Redis adapter | [SRS-FUN-15](./srs.md#srs-fun-15), [SRS-FUN-20](./srs.md#srs-fun-20), [SRS-NFR-PERF-03](./srs.md#srs-nfr-perf-03), [SRS-NFR-SCAL-01](./srs.md#srs-nfr-scal-01) | — |
 | PostgreSQL 16 + PostGIS | SQL | єдине джерело істини, [SRS-NFR-REL-02](./srs.md#srs-nfr-rel-02) | [ADR-001](./adr/0001-choice-of-technology.md) |
 | Redis 7 | BullMQ, Pub/Sub | транспорт задач і подій; не бере участі в гарантії коректності | [ADR-001](./adr/0001-choice-of-technology.md) |
 | Observability | Prometheus, Grafana, Loki | [SRS-NFR-OBS-01](./srs.md#srs-nfr-obs-01), [SRS-NFR-REL-01](./srs.md#srs-nfr-rel-01) | — |
@@ -159,6 +162,7 @@ C4Component
     Component(uow, "UnitOfWork", "Port + TypeORM adapter", "Межі транзакції")
     Component(unitRepo, "LotUnitRepository", "Port + SQL adapter", "SELECT FOR UPDATE SKIP LOCKED")
     Component(orderRepo, "OrderRepository", "Port + TypeORM adapter", "Замовлення та outbox")
+    Component(loRepo, "LimitOrderRepository", "Port + TypeORM adapter", "Лімітні ордери")
     Component(payClient, "PaymentGatewayClient", "Port + HTTPS adapter", "Створення платежу, перевірка підпису")
     Component(events, "EventPublisher", "Port + Redis adapter", "Події lot.stock_updated")
   }
@@ -184,11 +188,12 @@ C4Component
   Rel(reserveUC, events, "publish()", "DI")
   Rel(payUC, payClient, "verifySignature()", "DI")
   Rel(payUC, orderRepo, "markPaid()", "DI")
-  Rel(loUC, orderRepo, "save()", "DI")
+  Rel(loUC, loRepo, "save() / cancel()", "DI")
   Rel(reserveUC, filter, "DomainException", "throw / NestJS exception layer")
 
   Rel(unitRepo, db, "SQL", "TCP 5432")
   Rel(orderRepo, db, "SQL", "TCP 5432")
+  Rel(loRepo, db, "SQL", "TCP 5432")
   Rel(events, redis, "PUBLISH", "RESP / TCP 6379")
   Rel(payClient, pay, "Створення платежу", "REST / HTTPS")
 
@@ -225,6 +230,9 @@ DTO на команду та викликають відповідний use cas
 `lot.stock_updated`. `ConfirmPaymentUseCase` перевіряє підпис
 callback і переводить замовлення в `paid` лише з дозволеного стану.
 Доменна модель не залежить від NestJS, TypeORM чи Redis.
+`PaymentCallbackController` не проходить через `JwtAuthGuard`, оскільки
+запит надходить від LiqPay: автентичність підтверджується перевіркою
+підпису callback у `ConfirmPaymentUseCase`.
 
 **Шар інфраструктури (Outbound).** Репозиторії, клієнт платежів і
 публікатор подій оголошено як порти (TypeScript-інтерфейси) у шарі
