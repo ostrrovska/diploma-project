@@ -17,7 +17,7 @@
 ## Розділ 1: хмарний документ
 
 - Google Docs (режим «Can comment»):
-  [F2_Diploma_Chapter1_Ostrovska](https://docs.google.com/document/d/CHAPTER1_DOC_ID/edit?usp=sharing)
+  [F2_Diploma_Chapter1_Островська](https://docs.google.com/document/d/1EwixeDArLG5G-ovrnhtMRpU1IpkZDBvtJdm_MuYVbyE/edit?usp=sharing)
 - Локальна копія: [F2_Diploma_Chapter1_Ostrovska.docx](./chapters/F2_Diploma_Chapter1_Ostrovska.docx)
 
 ## Матриця нефункціональних вимог (NFRs)
