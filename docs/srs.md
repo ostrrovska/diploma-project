@@ -17,7 +17,7 @@
 сервіси Core API, Trading Service, Pricing Worker, Realtime Gateway,
 сховища PostgreSQL/PostGIS і Redis, контур спостережуваності. Поза
 межами системи: B2B-система закладів (Тема 2), платіжний провайдер,
-сервіс push-сповіщень, постачальник картографічних тайлів.
+сервіс push-сповіщень, постачальник картографічних фрагментів (tiles).
 
 **Конвенції.** «Повинна» — обов'язкова вимога. Пріоритет за MoSCoW:
 M (Must), S (Should), C (Could).
@@ -28,7 +28,7 @@ M (Must), S (Should), C (Could).
 |---|---|---|---|
 | Покупець | Person | пошук, купівля, лімітні ордери, отримання змін ціни | HTTPS (REST), WSS |
 | Адміністратор платформи | Person | модерація закладів, параметри Price Decay, моніторинг | HTTPS (REST), Grafana UI |
-| B2B-система (Тема 2) | External System | надсилає фід лотів; отримує підтвердження продажу | REST / HTTPS, HMAC-SHA256 |
+| B2B-система (Тема 2) | External System | надсилає потік лотів; отримує підтвердження продажу | REST / HTTPS, HMAC-SHA256 |
 | Платіжний провайдер (LiqPay, sandbox) | External System | hosted checkout; callback про статус оплати | HTTPS, підпис callback |
 | Expo Push Service / FCM | External System | доставка push-сповіщень про виконання ордера | HTTPS |
 | OpenStreetMap tiles | External System | картографічна підкладка в мобільному клієнті | HTTPS |
@@ -40,7 +40,7 @@ M (Must), S (Should), C (Could).
 
 ### SRS-FUN-01
 
-**Integration, M.** Система повинна приймати фід лотів від B2B-системи
+**Integration, M.** Система повинна приймати потік лотів від B2B-системи
 через `POST /integration/v1/lots` і відхиляти запит з кодом 401, якщо
 HMAC-SHA256 підпис у заголовку `X-Signature` не збігається.
 
@@ -163,7 +163,7 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 | <a id="srs-nfr-perf-02"></a>SRS-NFR-PERF-02 | Продуктивність | Час відгуку `POST /reservations` | p95 ≤ 250 мс при 200 одночасних VU на один лот |
 | <a id="srs-nfr-perf-03"></a>SRS-NFR-PERF-03 | Реальний час | Затримка від запису ціни до отримання клієнтом | p95 ≤ 2 с при 5 000 з'єднань і 50 подіях/с |
 | <a id="srs-nfr-perf-04"></a>SRS-NFR-PERF-04 | Продуктивність | Цикл перерахунку цін | ≤ 10 с для 10 000 активних лотів |
-| <a id="srs-nfr-scal-01"></a>SRS-NFR-SCAL-01 | Масштабованість | Одночасні WebSocket-з'єднання | ≥ 5 000 на 2 інстанси Realtime Gateway |
+| <a id="srs-nfr-scal-01"></a>SRS-NFR-SCAL-01 | Масштабованість | Одночасні WebSocket-з'єднання | ≥ 5 000 на 2 екземпляри Realtime Gateway |
 | <a id="srs-nfr-scal-02"></a>SRS-NFR-SCAL-02 | Масштабованість | Stateless-сервіси | запуск N реплік без зміни коду; стан — у PostgreSQL/Redis |
 | <a id="srs-nfr-cons-01"></a>SRS-NFR-CONS-01 | Коректність | Подвійний продаж | 0 випадків на 1 000 запитів до лота з 10 одиницями |
 | <a id="srs-nfr-sec-01"></a>SRS-NFR-SEC-01 | Безпека | Автентифікація | JWT RS256; ключі ротуються кожні 90 діб |
@@ -185,7 +185,7 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 
 | Вимога | Метод | Інструмент і критерій проходження |
 |---|---|---|
-| SRS-FUN-01, SRS-FUN-02 | Test | інтеграційні тести Jest + Supertest + Testcontainers (PostgreSQL): невалідний підпис → 401; повторний фід → без дублікатів |
+| SRS-FUN-01, SRS-FUN-02 | Test | інтеграційні тести Jest + Supertest + Testcontainers (PostgreSQL): невалідний підпис → 401; повторне надсилання лотів → без дублікатів |
 | SRS-FUN-03, SRS-FUN-04 | Test | Jest: хеш у БД має префікс `$argon2id$`; повторне використання refresh-токена → 401 |
 | SRS-FUN-05, SRS-FUN-06 | Test | Jest + Testcontainers (PostGIS) на еталонному наборі з 50 закладів; `EXPLAIN` підтверджує використання GiST-індексу |
 | SRS-FUN-07 | Test | модульні тести функції Price Decay (граничні значення `t_rem = T`, `t_rem = 0`) |
@@ -198,10 +198,10 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 | SRS-FUN-18 | Test | Jest: нарахування балів за `paid`; щоденний decay з fake timers |
 | SRS-FUN-19 | Test | e2e: зміна `k` адміністратором → нова ціна в наступному циклі; запит без ролі `admin` → 403 |
 | SRS-FUN-20 | Test | Jest + socket.io-client: handshake без токена → `connect_error` |
-| SRS-FUN-17, SRS-NFR-COMP-01 | Inspection | SQL-перевірка відсутності персональних даних після job видалення; рев'ю схеми логів |
+| SRS-FUN-17, SRS-NFR-COMP-01 | Inspection | SQL-перевірка відсутності персональних даних після задачі видалення; інспекція схеми логів |
 | SRS-NFR-PERF-01 | Test | k6, сценарій `constant-arrival-rate` 300 RPS, 10 хв |
 | SRS-NFR-PERF-04 | Test | бенчмарк Worker на 10 000 згенерованих лотів, метрика `pricing_cycle_duration_seconds` |
-| SRS-NFR-SEC-01, SRS-NFR-SEC-02 | Inspection | `testssl.sh` для TLS; рев'ю конфігурації Traefik |
+| SRS-NFR-SEC-01, SRS-NFR-SEC-02 | Inspection | `testssl.sh` для TLS; інспекція конфігурації Traefik |
 | SRS-NFR-SEC-03 | Analysis | Trivy (образи, `npm` lock-файл) у GitHub Actions; SonarQube Quality Gate |
 | SRS-NFR-SEC-04 | Test | OWASP ZAP baseline scan у CI |
 | SRS-NFR-REL-01 | Demonstration | Prometheus `up` + Grafana SLO-панель за 30 діб пілоту |
@@ -225,13 +225,24 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 
 ## 7. Матриця трасування
 
-| SRS | Core Feature (Розділ 1) | Усунене вузьке місце |
+Матриця пов'язує кожну функціональну вимогу SRS із джерелом у
+Розділі 1 ([1_analysis.md](./1_analysis.md)): Core Feature (CF),
+нефункціональною вимогою (NFR) або нормативним обмеженням
+(підрозділ 1.4.4), а також із вузьким місцем моделі As-Is, яке вона
+усуває.
+
+| SRS | Джерело в Розділі 1 | Усунене вузьке місце / обґрунтування |
 |---|---|---|
 | SRS-FUN-01, 02 | CF-1 | B1.2, B1.3 |
-| SRS-FUN-03, 04 | CF-2 | — (безпека) |
-| SRS-FUN-05, 06 | CF-3 | B1.3 |
-| SRS-FUN-07, 08 | CF-4 | B1.1 |
-| SRS-FUN-09, 10 | CF-5 | B2.1, B2.2 |
-| SRS-FUN-11, 12 | CF-6 | B2.3 |
+| SRS-FUN-03, 04 | CF-2; NFR-SEC-01, NFR-SEC-02 | — (безпека доступу) |
+| SRS-FUN-05, 06 | CF-3; NFR-PERF-01 | B1.3 |
+| SRS-FUN-07, 08 | CF-4; NFR-PERF-04 | B1.1; заборона продажу після `expires_at` (1.4.4) |
+| SRS-FUN-09, 10 | CF-5; NFR-PERF-02, NFR-CONS-01 | B2.1, B2.2 |
+| SRS-FUN-11, 12 | CF-6; NFR-REL-03 | B2.3, B1.2 |
 | SRS-FUN-13, 14 | CF-7 | B3.3 |
-| SRS-FUN-15, 20 | CF-8 | B3.1, B3.2 |
+| SRS-FUN-15 | CF-8; NFR-PERF-03, NFR-SCAL-01 | B3.1, B3.2 |
+| SRS-FUN-16 | NFR-SEC-03 | захист API від зловживань під піковим навантаженням (OWASP API4:2023) |
+| SRS-FUN-17 | NFR-COMP-01 | GDPR, Закон України № 2297-VI (1.4.4) |
+| SRS-FUN-18 | допоміжні функції (модуль Gamification, 1.5.2) | — (утримання активності користувачів) |
+| SRS-FUN-19 | CF-4; актор «Адміністратор платформи» (1.4.2) | B1.1 (калібрування кривої Price Decay) |
+| SRS-FUN-20 | CF-8; NFR-SEC-01 | — (автентифікація каналу реального часу) |
