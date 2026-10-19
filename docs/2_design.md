@@ -25,12 +25,12 @@ C4Context
 
   Rel(consumer, b2c, "Пошук, купівля, ордери", "HTTPS REST, WSS")
   Rel(admin, b2c, "Адміністрування, моніторинг", "HTTPS")
-  Rel(b2b, b2c, "Фід лотів", "REST / HTTPS + HMAC-SHA256")
+  Rel(b2b, b2c, "Потік лотів", "REST / HTTPS + HMAC-SHA256")
   Rel(b2c, b2b, "Підтвердження продажу", "Webhook REST / HTTPS")
   Rel(b2c, pay, "Створення платежу", "REST / HTTPS")
   Rel(pay, b2c, "Callback статусу оплати", "HTTPS POST + підпис")
   Rel(b2c, push, "Сповіщення про виконання ордера", "REST / HTTPS")
-  Rel(consumer, osm, "Завантаження тайлів мапи", "HTTPS")
+  Rel(consumer, osm, "Завантаження фрагментів мапи (tiles)", "HTTPS")
 
   UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
 ```
@@ -40,7 +40,7 @@ C4Context
 | Елемент | Тип | Відповідальність | Протокол |
 |---|---|---|---|
 | Покупець | Person | використовує мобільний клієнт | HTTPS REST, WSS |
-| Адміністратор платформи | Person | адміністративні ендпоінти, Grafana | HTTPS |
+| Адміністратор платформи | Person | адміністративні методи REST API, Grafana | HTTPS |
 | B2C-підсистема | System | предмет кваліфікаційної роботи | — |
 | B2B-система (Тема 2) | External System | джерело лотів ([SRS-FUN-01](./srs.md#srs-fun-01)), отримувач підтверджень ([SRS-FUN-12](./srs.md#srs-fun-12)) | REST / HTTPS, HMAC-SHA256 |
 | LiqPay (sandbox) | External System | оплата без обробки даних карток ([SRS-NFR-COMP-02](./srs.md#srs-nfr-comp-02)) | REST / HTTPS, підписаний callback |
@@ -66,7 +66,7 @@ C4Container
     Container(gw, "API Gateway", "Traefik v3", "TLS 1.3, маршрутизація, rate limiting")
     Container(core, "Core API", "NestJS, TypeScript", "Auth, каталог, геопошук, інтеграція B2B, гейміфікація")
     Container(trading, "Trading Service", "NestJS, TypeScript", "Резервування SKIP LOCKED, замовлення, лімітні ордери, оплата")
-    Container(worker, "Pricing Worker", "NestJS, BullMQ", "Price Decay, матчинг ордерів, TTL резервів, outbox relay")
+    Container(worker, "Pricing Worker", "NestJS, BullMQ", "Price Decay, зіставлення ордерів із ціною, TTL резервів, outbox relay")
     Container(rt, "Realtime Gateway", "NestJS, Socket.IO", "WebSocket-кімнати закладів")
     ContainerDb(db, "PostgreSQL 16 + PostGIS", "SQL", "Лоти, одиниці, замовлення, користувачі, геодані")
     ContainerQueue(redis, "Redis 7", "Pub/Sub, BullMQ", "Черги задач, pub/sub подій, кеш")
@@ -77,7 +77,7 @@ C4Container
   Rel(admin, gw, "Адмін-API (Swagger UI), Grafana", "HTTPS")
   Rel(mobile, gw, "API-запити", "REST / HTTPS")
   Rel(mobile, gw, "Підписка на зміни", "WSS")
-  Rel(b2b, gw, "Фід лотів", "REST / HTTPS + HMAC")
+  Rel(b2b, gw, "Потік лотів", "REST / HTTPS + HMAC")
   Rel(pay, gw, "Callback оплати", "HTTPS POST")
   Rel(gw, core, "/auth, /lots, /venues, /integration", "REST / HTTP")
   Rel(gw, trading, "/reservations, /orders, /limit-orders, /payments", "REST / HTTP")
