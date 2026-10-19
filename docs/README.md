@@ -14,13 +14,13 @@
 - [adr/](./adr/) — Architecture Decision Records
   - [ADR-001: контроль конкурентного бронювання](./adr/0001-choice-of-technology.md)
 - [3_implementation.md](./3_implementation.md) — Розділ 3: інтерфейс,
-  тестування, деплой
+  тестування, розгортання
 - [4_conclusions.md](./4_conclusions.md) — Висновки
 
 ## Розділ 1: хмарний документ
 
 - Google Docs (режим «Can comment»):
-  [F2_Diploma_Chapter1_Ostrovska](https://docs.google.com/document/d/CHAPTER1_DOC_ID/edit?usp=sharing)
+  [F2_Diploma_Chapter1_Островська](https://docs.google.com/document/d/1EwixeDArLG5G-ovrnhtMRpU1IpkZDBvtJdm_MuYVbyE/edit?usp=sharing)
 - Локальна копія: [F2_Diploma_Chapter1_Ostrovska.docx](./chapters/F2_Diploma_Chapter1_Ostrovska.docx)
 
 ## Матриця нефункціональних вимог (NFRs)
@@ -30,7 +30,7 @@
 | Категорія | Ключове обмеження |
 |---|---|
 | Продуктивність | пошук лотів p95 ≤ 150 мс при 300 RPS; резервування p95 ≤ 250 мс при 200 одночасних запитах на лот |
-| Реальний час | доставка зміни ціни через WebSocket p95 ≤ 2 с; ≥ 5 000 з'єднань на 2 інстанси |
+| Реальний час | доставка зміни ціни через WebSocket p95 ≤ 2 с; ≥ 5 000 з'єднань на 2 екземпляри |
 | Коректність | 0 подвійних продажів (`SELECT FOR UPDATE SKIP LOCKED`) |
 | Безпека | JWT RS256 (access 15 хв), TLS 1.3, Argon2id, rate limit 100 запитів/хв, OWASP API Top 10 |
 | Комплаєнс | GDPR / Закон № 2297-VI; PCI DSS — дані карток не обробляються |
