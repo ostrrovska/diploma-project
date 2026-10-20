@@ -5,19 +5,44 @@
 
 ## Структура
 
+- [proposal.md](./proposal.md) — Thesis Proposal
 - [0_intro.md](./0_intro.md) — Вступ, науковий апарат
-- [1_analysis.md](./1_analysis.md) — Розділ 1: аналіз аналогів і ТЗ
-- [2_design.md](./2_design.md) — Розділ 2: UML, C4 Model, схеми даних
+- [1_analysis.md](./1_analysis.md) — Розділ 1: аналіз предметної
+  області, аналоги, модель As-Is/To-Be, вимоги
+- [srs.md](./srs.md) — Специфікація вимог (ISO/IEC/IEEE 29148)
+- [2_design.md](./2_design.md) — Розділ 2: C4 Model (Levels 1–3), трасування вимог
+- [adr/](./adr/) — Architecture Decision Records
+  - [ADR-001: контроль конкурентного бронювання](./adr/0001-choice-of-technology.md)
 - [3_implementation.md](./3_implementation.md) — Розділ 3: інтерфейс,
-  тестування, деплой
+  тестування, розгортання
 - [4_conclusions.md](./4_conclusions.md) — Висновки
+
+## Розділ 1: хмарний документ
+
+- Google Docs (режим «Can comment»):
+  [F2_Diploma_Chapter1_Островська](https://docs.google.com/document/d/1EwixeDArLG5G-ovrnhtMRpU1IpkZDBvtJdm_MuYVbyE/edit?usp=sharing)
+- Локальна копія: [F2_Diploma_Chapter1_Ostrovska.docx](./chapters/F2_Diploma_Chapter1_Ostrovska.docx)
+
+## Матриця нефункціональних вимог (NFRs)
+
+Повний перелік — у [1_analysis.md](./1_analysis.md#153-нефункціональні-вимоги-nfrs).
+
+| Категорія | Ключове обмеження |
+|---|---|
+| Продуктивність | пошук лотів p95 ≤ 150 мс при 300 RPS; резервування p95 ≤ 250 мс при 200 одночасних запитах на лот |
+| Реальний час | доставка зміни ціни через WebSocket p95 ≤ 2 с; ≥ 5 000 з'єднань на 2 екземпляри |
+| Коректність | 0 подвійних продажів (`SELECT FOR UPDATE SKIP LOCKED`) |
+| Безпека | JWT RS256 (access 15 хв), TLS 1.3, Argon2id, rate limit 100 запитів/хв, OWASP API Top 10 |
+| Комплаєнс | GDPR / Закон № 2297-VI; PCI DSS — дані карток не обробляються |
+| Надійність | доступність ≥ 99,5%; RPO ≤ 24 год, RTO ≤ 1 год; задачі at-least-once з DLQ |
+| Інфраструктура | Docker Compose, GitHub Actions ≤ 10 хв, покриття доменних модулів ≥ 70% |
 
 ## Календарний план
 
 | № | Етап | Термін | Статус |
 |---|------|--------|--------|
-| 1 | Аналіз аналогів та науковий апарат | Жовтень 2026 | To Do |
-| 2 | Архітектура (UML/C4), схема БД | Листопад 2026 | To Do |
+| 1 | Аналіз аналогів, науковий апарат, вимоги (Розділ 1) | Жовтень 2026 | Done |
+| 2 | Архітектура (UML/C4), SRS, ADR, схема БД | Листопад 2026 | In Progress |
 | 3 | Алгоритмізація критичних вузлів | Грудень 2026 | To Do |
 | 4 | Core API, автентифікація, контракт | Січень 2027 | To Do |
 | 5 | Геодані (PostGIS) і real-time клієнт | Лютий 2027 | To Do |
