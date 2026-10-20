@@ -65,53 +65,48 @@ flowchart TB
 ### 2.1.2. C4 Level 2 — Container Diagram
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 70, "rankSpacing": 80, "wrappingWidth": 240, "padding": 12}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 55, "wrappingWidth": 170, "padding": 8}}}%%
 flowchart TB
   consumer["<b>Покупець</b><br/>[Person]"]
-  admin["<b>Адміністратор платформи</b><br/>[Person]"]
+  admin["<b>Адміністратор</b><br/>[Person]"]
   b2b["<b>B2B-система (Тема 2)</b><br/>[External System]"]
   pay["<b>LiqPay (sandbox)</b><br/>[External System]"]
   push["<b>Expo Push / FCM</b><br/>[External System]"]
 
   subgraph b2c["B2C-підсистема [Software System]"]
-    mobile["<b>Mobile App</b><br/>[Container: React Native, Expo]<br/>Мапа, лоти, кошик, лімітні ордери"]
-    gw["<b>API Gateway</b><br/>[Container: Traefik v3]<br/>TLS 1.3, маршрутизація, rate limiting"]
-    core["<b>Core API</b><br/>[Container: NestJS]<br/>Auth, каталог, геопошук,<br/>інтеграція B2B, гейміфікація"]
-    trading["<b>Trading Service</b><br/>[Container: NestJS]<br/>Резервування SKIP LOCKED,<br/>замовлення, лімітні ордери, оплата"]
-    rt["<b>Realtime Gateway</b><br/>[Container: NestJS, Socket.IO]<br/>WebSocket-кімнати закладів"]
-    worker["<b>Pricing Worker</b><br/>[Container: NestJS, BullMQ]<br/>Price Decay, зіставлення ордерів<br/>із ціною, TTL резервів, outbox relay"]
-    db[("<b>PostgreSQL 16 + PostGIS</b><br/>[Container: SQL Database]<br/>Лоти, одиниці, замовлення,<br/>користувачі, геодані")]
-    redis[("<b>Redis 7</b><br/>[Container: Pub/Sub, BullMQ]<br/>Черги задач, події, кеш")]
-    obs["<b>Observability</b><br/>[Container: Prometheus, Grafana, Loki]<br/>Метрики, логи, SLO-панелі"]
+    mobile["<b>Mobile App</b><br/>[Container: React Native]<br/>Мапа, лоти, ордери"]
+    gw["<b>API Gateway</b><br/>[Container: Traefik v3]<br/>TLS 1.3, rate limiting"]
+    subgraph backend["Сервіси бекенду"]
+      core["<b>Core API</b><br/>[Container: NestJS]<br/>Auth, каталог, геопошук, B2B"]
+      trading["<b>Trading Service</b><br/>[Container: NestJS]<br/>Резервування, оплата, ордери"]
+      worker["<b>Pricing Worker</b><br/>[Container: NestJS, BullMQ]<br/>Price Decay, зіставлення, outbox"]
+    end
+    rt["<b>Realtime Gateway</b><br/>[Container: Socket.IO]<br/>WebSocket-кімнати"]
+    db[("<b>PostgreSQL 16 + PostGIS</b><br/>[Container: SQL DB]")]
+    redis[("<b>Redis 7</b><br/>[Container: Pub/Sub, черги]")]
+    obs["<b>Observability</b><br/>[Container: Prometheus, Grafana]"]
   end
 
   consumer -- "Використовує" --> mobile
-  mobile -- "API-запити, підписка на зміни<br/>[REST / HTTPS, WSS]" --> gw
-  admin -- "Адмін-API (Swagger UI), Grafana<br/>[HTTPS]" --> gw
-  b2b -- "Потік лотів<br/>[REST / HTTPS + HMAC]" --> gw
+  mobile -- "API, підписка<br/>[HTTPS, WSS]" --> gw
+  admin -- "Адмін-API, Grafana<br/>[HTTPS]" --> gw
+  b2b -- "Потік лотів<br/>[HTTPS + HMAC]" --> gw
   pay -- "Callback оплати<br/>[HTTPS POST]" --> gw
 
-  gw -- "/auth, /lots, /venues, /integration<br/>[REST / HTTP]" --> core
-  gw -- "/reservations, /orders,<br/>/limit-orders, /payments<br/>[REST / HTTP]" --> trading
+  gw -- "/auth /lots /integration<br/>[REST / HTTP]" --> core
+  gw -- "/reservations /orders<br/>[REST / HTTP]" --> trading
   gw -- "/ws<br/>[WebSocket]" --> rt
   gw -- "/grafana<br/>[HTTP]" --> obs
 
-  core -- "Читання / запис<br/>[SQL / TCP 5432]" --> db
-  core -- "Кеш геопошуку, подія lot.created<br/>[RESP / TCP 6379]" --> redis
-  trading -- "Транзакції SKIP LOCKED<br/>[SQL / TCP 5432]" --> db
-  trading -- "Задачі auto-reserve, події<br/>[RESP / TCP 6379]" --> redis
-  worker -- "Пакетний UPDATE цін, outbox<br/>[SQL / TCP 5432]" --> db
-  worker -- "Споживання задач, публікація подій<br/>[RESP / TCP 6379]" --> redis
-  rt -- "Підписка на події, адаптер<br/>[RESP / TCP 6379]" --> redis
+  backend -- "Транзакції, SKIP LOCKED, outbox<br/>[SQL / TCP 5432]" --> db
+  backend -- "Черги BullMQ, кеш, події<br/>[RESP / TCP 6379]" --> redis
+  rt -- "Підписка на події<br/>[RESP / TCP 6379]" --> redis
+  backend -. "Метрики<br/>[HTTP /metrics]" .-> obs
+  rt -. "Метрики<br/>[HTTP /metrics]" .-> obs
 
-  trading -- "Створення платежу<br/>[REST / HTTPS]" --> pay
-  worker -- "Webhook підтвердження<br/>[REST / HTTPS]" --> b2b
-  worker -- "Push про виконання ордера<br/>[REST / HTTPS]" --> push
-
-  core -. "Метрики (pull)<br/>[HTTP /metrics]" .-> obs
-  trading -. "Метрики (pull)<br/>[HTTP /metrics]" .-> obs
-  worker -. "Метрики (pull)<br/>[HTTP /metrics]" .-> obs
-  rt -. "Метрики (pull)<br/>[HTTP /metrics]" .-> obs
+  trading -- "Платіж<br/>[HTTPS]" --> pay
+  worker -- "Webhook продажу<br/>[HTTPS]" --> b2b
+  worker -- "Push про ордер<br/>[HTTPS]" --> push
 
   classDef person fill:#08427b,stroke:#052e56,color:#ffffff
   classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
@@ -120,6 +115,7 @@ flowchart TB
   class mobile,gw,core,trading,rt,worker,db,redis,obs container
   class b2b,pay,push external
   style b2c fill:#ffffff,stroke:#444444,stroke-dasharray:6 4,color:#222222
+  style backend fill:#eef4fb,stroke:#7a9cc6,color:#222222
 ```
 
 **Опис контейнерів і трасування вимог (Level 2):**
@@ -136,6 +132,13 @@ flowchart TB
 | Redis 7 | BullMQ, Pub/Sub | транспорт задач і подій; не бере участі в гарантії коректності | [ADR-001](./adr/0001-choice-of-technology.md) |
 | Observability | Prometheus, Grafana, Loki | [SRS-NFR-OBS-01](./srs.md#srs-nfr-obs-01), [SRS-NFR-REL-01](./srs.md#srs-nfr-rel-01) | — |
 
+Core API, Trading Service і Pricing Worker на діаграмі згруповано в
+«Сервіси бекенду», щоб спільні зв'язки зі сховищами не дублювалися:
+усі три сервіси звертаються до PostgreSQL (SQL / TCP 5432) і Redis
+(RESP / TCP 6379) — Core API для каталогу, геопошуку й кешу, Trading
+Service для транзакцій SKIP LOCKED і задач auto-reserve, Pricing Worker
+для пакетного оновлення цін, outbox і черг BullMQ; метрики всіх
+сервісів збирає Observability через HTTP `/metrics`.
 Протоколи: зовнішній трафік — лише через API Gateway (REST / HTTPS,
 WSS, TLS 1.3); внутрішній трафік у мережі Docker — REST / HTTP і
 WebSocket; доступ до сховищ — SQL / TCP 5432 та RESP / TCP 6379.
@@ -155,77 +158,77 @@ WebSocket; доступ до сховищ — SQL / TCP 5432 та RESP / TCP 637
 ордерів.
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 70, "rankSpacing": 80, "wrappingWidth": 240, "padding": 12}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 25, "rankSpacing": 50, "wrappingWidth": 150, "padding": 8}}}%%
 flowchart TB
-  gw["<b>API Gateway</b><br/>[Container: Traefik v3]"]
+  gw["<b>API Gateway</b><br/>[Container: Traefik]"]
   redisIn[("<b>Redis 7</b><br/>[Container: BullMQ]")]
 
   subgraph trading["Trading Service [Container: NestJS]"]
-    subgraph pipeline["Конвеєр обробки запиту (cross-cutting)"]
-      telemetry["<b>TelemetryInterceptor</b><br/>[Component: pino, prom-client]<br/>Логи з correlation-id, метрики RED"]
-      guard["<b>JwtAuthGuard</b><br/>[Component: NestJS Guard]<br/>Верифікація JWT RS256, RBAC"]
-      idem["<b>IdempotencyInterceptor</b><br/>[Component: NestJS Interceptor]<br/>Ключ Idempotency-Key"]
-      pipe["<b>ValidationPipe</b><br/>[Component: class-validator]<br/>Валідація DTO"]
+    subgraph pipeline["Конвеєр запиту (cross-cutting)"]
+      telemetry["<b>TelemetryInterceptor</b><br/>[Component]<br/>correlation-id, метрики"]
+      guard["<b>JwtAuthGuard</b><br/>[Component]<br/>JWT RS256, RBAC"]
+      idem["<b>IdempotencyInterceptor</b><br/>[Component]<br/>Idempotency-Key"]
+      pipe["<b>ValidationPipe</b><br/>[Component]<br/>Валідація DTO"]
     end
 
     subgraph inbound["Вхідний шар"]
-      resCtl["<b>ReservationController</b><br/>[Component: REST]<br/>POST /reservations"]
-      loCtl["<b>LimitOrderController</b><br/>[Component: REST]<br/>POST / DELETE /limit-orders"]
-      payCtl["<b>PaymentCallbackController</b><br/>[Component: REST]<br/>POST /payments/callback"]
-      autoRes["<b>AutoReserveConsumer</b><br/>[Component: BullMQ Processor]<br/>Задачі limit-order.triggered"]
+      resCtl["<b>ReservationController</b><br/>[Component: REST]"]
+      loCtl["<b>LimitOrderController</b><br/>[Component: REST]"]
+      payCtl["<b>PaymentCallbackController</b><br/>[Component: REST]"]
+      autoRes["<b>AutoReserveConsumer</b><br/>[Component: BullMQ]"]
     end
 
     subgraph app["Шар застосунку та домену"]
-      reserveUC["<b>ReserveLotUnitUseCase</b><br/>[Component: Application Service]<br/>Атомарне резервування"]
-      loUC["<b>LimitOrderService</b><br/>[Component: Application Service]<br/>Створення та скасування ордерів"]
-      payUC["<b>ConfirmPaymentUseCase</b><br/>[Component: Application Service]<br/>Ідемпотентне підтвердження оплати"]
-      domain["<b>Domain Model</b><br/>[Component: TypeScript]<br/>Reservation, Order, LimitOrder"]
-      filter["<b>GlobalExceptionFilter</b><br/>[Component: NestJS Filter]<br/>Помилки у форматі RFC 9457"]
+      reserveUC["<b>ReserveLotUnitUseCase</b><br/>[Component]<br/>Атомарне резервування"]
+      loUC["<b>LimitOrderService</b><br/>[Component]<br/>Ордери"]
+      payUC["<b>ConfirmPaymentUseCase</b><br/>[Component]<br/>Підтвердження оплати"]
+      domain["<b>Domain Model</b><br/>[Component]<br/>Інваріанти"]
+      filter["<b>GlobalExceptionFilter</b><br/>[Component]<br/>RFC 9457"]
     end
 
     subgraph outbound["Шар інфраструктури (порти та адаптери)"]
-      uow["<b>UnitOfWork</b><br/>[Component: Port + TypeORM]<br/>Межі транзакції"]
-      unitRepo["<b>LotUnitRepository</b><br/>[Component: Port + SQL]<br/>SELECT FOR UPDATE SKIP LOCKED"]
-      orderRepo["<b>OrderRepository</b><br/>[Component: Port + TypeORM]<br/>Замовлення та outbox"]
-      loRepo["<b>LimitOrderRepository</b><br/>[Component: Port + TypeORM]<br/>Лімітні ордери"]
-      payClient["<b>PaymentGatewayClient</b><br/>[Component: Port + HTTPS]<br/>Платіж, перевірка підпису"]
-      events["<b>EventPublisher</b><br/>[Component: Port + Redis]<br/>Події lot.stock_updated"]
+      uow["<b>UnitOfWork</b><br/>[Port + TypeORM]"]
+      unitRepo["<b>LotUnitRepository</b><br/>[Port + SQL]<br/>SKIP LOCKED"]
+      orderRepo["<b>OrderRepository</b><br/>[Port + TypeORM]<br/>+ outbox"]
+      loRepo["<b>LimitOrderRepository</b><br/>[Port + TypeORM]"]
+      payClient["<b>PaymentGatewayClient</b><br/>[Port + HTTPS]"]
+      events["<b>EventPublisher</b><br/>[Port + Redis]"]
     end
   end
 
-  db[("<b>PostgreSQL 16</b><br/>[Container: SQL Database]")]
+  db[("<b>PostgreSQL 16</b><br/>[Container: SQL DB]")]
   redisOut[("<b>Redis 7</b><br/>[Container: Pub/Sub]")]
   pay["<b>LiqPay (sandbox)</b><br/>[External System]"]
 
-  gw -- "Вхідний запит<br/>[REST / HTTP]" --> telemetry
-  telemetry -- "Запит з correlation-id" --> guard
-  guard -- "Автентифікований запит" --> idem
-  idem -- "Новий ключ ідемпотентності" --> pipe
-  pipe -- "Валідований DTO" --> resCtl
-  pipe -- "Валідований DTO" --> loCtl
-  gw -- "Callback LiqPay<br/>[REST / HTTP]" --> payCtl
-  redisIn -- "Задача auto-reserve<br/>[BullMQ / RESP]" --> autoRes
+  gw -- "[REST / HTTP]" --> telemetry
+  telemetry --> guard
+  guard --> idem
+  idem --> pipe
+  pipe -- "DTO" --> resCtl
+  pipe -- "DTO" --> loCtl
+  gw -- "Callback<br/>[REST / HTTP]" --> payCtl
+  redisIn -- "auto-reserve<br/>[BullMQ]" --> autoRes
 
-  resCtl -- "Інтерфейс [DI]" --> reserveUC
-  autoRes -- "Інтерфейс [DI]" --> reserveUC
-  loCtl -- "Інтерфейс [DI]" --> loUC
-  payCtl -- "Інтерфейс [DI]" --> payUC
+  resCtl -- "[DI]" --> reserveUC
+  autoRes -- "[DI]" --> reserveUC
+  loCtl -- "[DI]" --> loUC
+  payCtl -- "[DI]" --> payUC
 
-  reserveUC -- "Інваріанти резерву" --> domain
+  reserveUC --> domain
   reserveUC -. "DomainException" .-> filter
-  reserveUC -- "BEGIN / COMMIT [DI]" --> uow
-  reserveUC -- "lockFirstAvailable() [DI]" --> unitRepo
-  reserveUC -- "save() + outbox [DI]" --> orderRepo
-  reserveUC -- "publish() [DI]" --> events
-  loUC -- "save() / cancel() [DI]" --> loRepo
-  payUC -- "markPaid() [DI]" --> orderRepo
-  payUC -- "verifySignature() [DI]" --> payClient
+  reserveUC -- "BEGIN/COMMIT" --> uow
+  reserveUC -- "lockFirstAvailable()" --> unitRepo
+  reserveUC -- "save() + outbox" --> orderRepo
+  reserveUC -- "publish()" --> events
+  loUC -- "save() / cancel()" --> loRepo
+  payUC -- "markPaid()" --> orderRepo
+  payUC -- "verifySignature()" --> payClient
 
-  unitRepo -- "[SQL / TCP 5432]" --> db
-  orderRepo -- "[SQL / TCP 5432]" --> db
-  loRepo -- "[SQL / TCP 5432]" --> db
-  events -- "PUBLISH<br/>[RESP / TCP 6379]" --> redisOut
-  payClient -- "Створення платежу<br/>[REST / HTTPS]" --> pay
+  unitRepo -- "[SQL :5432]" --> db
+  orderRepo -- "[SQL :5432]" --> db
+  loRepo -- "[SQL :5432]" --> db
+  events -- "PUBLISH<br/>[RESP :6379]" --> redisOut
+  payClient -- "[REST / HTTPS]" --> pay
 
   classDef component fill:#85bbf0,stroke:#5d82a8,color:#000000
   classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
