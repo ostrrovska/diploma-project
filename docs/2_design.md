@@ -5,34 +5,47 @@
 
 ## 2.1. Контекстне та контейнерне моделювання системи (C4 Model)
 
+Діаграми побудовано в нотації C4 (Simon Brown) засобами Mermaid
+`flowchart`: тип елемента вказано стереотипом у підписі ([Person],
+[Software System], [External System], [Container: …],
+[Component: …]), кольори відповідають палітрі C4, кожен зв'язок
+підписано дією та протоколом у квадратних дужках. Вбудований
+синтаксис `C4Context`/`C4Container` у Mermaid не розводить підписи
+зв'язків і дає накладання тексту, тому для читабельності обрано
+`flowchart` з автоматичною розкладкою.
+
 <a id="diagram-level1"></a>
 
 ### 2.1.1. C4 Level 1 — System Context
 
 ```mermaid
-C4Context
-  title C4 Level 1 — System Context: B2C-підсистема маркетплейсу
+%%{init: {"flowchart": {"nodeSpacing": 70, "rankSpacing": 80, "wrappingWidth": 240, "padding": 12}}}%%
+flowchart TB
+  consumer["<b>Покупець</b><br/>[Person]<br/>Шукає лоти поруч, купує,<br/>створює лімітні ордери"]
+  admin["<b>Адміністратор платформи</b><br/>[Person]<br/>Модерує заклади, налаштовує<br/>параметри Price Decay"]
 
-  Person(consumer, "Покупець", "Шукає лоти поруч, купує, створює лімітні ордери")
-  Person(admin, "Адміністратор платформи", "Модерує заклади, налаштовує параметри Price Decay")
+  b2c["<b>B2C-підсистема маркетплейсу</b><br/>[Software System]<br/>Динамічне ціноутворення, лімітні ордери,<br/>конкурентне бронювання, геопошук"]
 
-  System(b2c, "B2C-підсистема маркетплейсу", "Динамічне ціноутворення, лімітні ордери, конкурентне бронювання, геопошук")
+  b2b["<b>B2B-система закладів (Тема 2)</b><br/>[External System]<br/>Облік залишків і публікація лотів"]
+  pay["<b>LiqPay (sandbox)</b><br/>[External System]<br/>Hosted checkout і callback оплати"]
+  push["<b>Expo Push Service / FCM</b><br/>[External System]<br/>Доставка push-сповіщень"]
+  osm["<b>OpenStreetMap tiles</b><br/>[External System]<br/>Картографічна підкладка"]
 
-  System_Ext(b2b, "B2B-система закладів (Тема 2)", "Облік залишків і публікація лотів")
-  System_Ext(pay, "LiqPay (sandbox)", "Hosted checkout і callback про оплату")
-  System_Ext(push, "Expo Push Service / FCM", "Доставка push-сповіщень")
-  System_Ext(osm, "OpenStreetMap tiles", "Картографічна підкладка")
+  consumer -- "Пошук, купівля, ордери<br/>[HTTPS REST, WSS]" --> b2c
+  admin -- "Адміністрування, моніторинг<br/>[HTTPS]" --> b2c
+  consumer -- "Фрагменти мапи (tiles)<br/>[HTTPS]" --> osm
+  b2b -- "Потік лотів<br/>[REST / HTTPS + HMAC-SHA256]" --> b2c
+  b2c -- "Підтвердження продажу<br/>[Webhook REST / HTTPS]" --> b2b
+  b2c -- "Створення платежу<br/>[REST / HTTPS]" --> pay
+  pay -- "Callback статусу оплати<br/>[HTTPS POST + підпис]" --> b2c
+  b2c -- "Сповіщення про виконання ордера<br/>[REST / HTTPS]" --> push
 
-  Rel(consumer, b2c, "Пошук, купівля, ордери", "HTTPS REST, WSS")
-  Rel(admin, b2c, "Адміністрування, моніторинг", "HTTPS")
-  Rel(b2b, b2c, "Потік лотів", "REST / HTTPS + HMAC-SHA256")
-  Rel(b2c, b2b, "Підтвердження продажу", "Webhook REST / HTTPS")
-  Rel(b2c, pay, "Створення платежу", "REST / HTTPS")
-  Rel(pay, b2c, "Callback статусу оплати", "HTTPS POST + підпис")
-  Rel(b2c, push, "Сповіщення про виконання ордера", "REST / HTTPS")
-  Rel(consumer, osm, "Завантаження фрагментів мапи (tiles)", "HTTPS")
-
-  UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
+  classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+  classDef system fill:#1168bd,stroke:#0b4884,color:#ffffff
+  classDef external fill:#8a8a8a,stroke:#5e5e5e,color:#ffffff
+  class consumer,admin person
+  class b2c system
+  class b2b,pay,push,osm external
 ```
 
 **Опис вузлів і зв'язків (Level 1):**
@@ -52,53 +65,61 @@ C4Context
 ### 2.1.2. C4 Level 2 — Container Diagram
 
 ```mermaid
-C4Container
-  title C4 Level 2 — Container Diagram: B2C-підсистема маркетплейсу
+%%{init: {"flowchart": {"nodeSpacing": 70, "rankSpacing": 80, "wrappingWidth": 240, "padding": 12}}}%%
+flowchart TB
+  consumer["<b>Покупець</b><br/>[Person]"]
+  admin["<b>Адміністратор платформи</b><br/>[Person]"]
+  b2b["<b>B2B-система (Тема 2)</b><br/>[External System]"]
+  pay["<b>LiqPay (sandbox)</b><br/>[External System]"]
+  push["<b>Expo Push / FCM</b><br/>[External System]"]
 
-  Person(consumer, "Покупець")
-  Person(admin, "Адміністратор платформи")
-  System_Ext(b2b, "B2B-система (Тема 2)")
-  System_Ext(pay, "LiqPay (sandbox)")
-  System_Ext(push, "Expo Push / FCM")
+  subgraph b2c["B2C-підсистема [Software System]"]
+    mobile["<b>Mobile App</b><br/>[Container: React Native, Expo]<br/>Мапа, лоти, кошик, лімітні ордери"]
+    gw["<b>API Gateway</b><br/>[Container: Traefik v3]<br/>TLS 1.3, маршрутизація, rate limiting"]
+    core["<b>Core API</b><br/>[Container: NestJS]<br/>Auth, каталог, геопошук,<br/>інтеграція B2B, гейміфікація"]
+    trading["<b>Trading Service</b><br/>[Container: NestJS]<br/>Резервування SKIP LOCKED,<br/>замовлення, лімітні ордери, оплата"]
+    rt["<b>Realtime Gateway</b><br/>[Container: NestJS, Socket.IO]<br/>WebSocket-кімнати закладів"]
+    worker["<b>Pricing Worker</b><br/>[Container: NestJS, BullMQ]<br/>Price Decay, зіставлення ордерів<br/>із ціною, TTL резервів, outbox relay"]
+    db[("<b>PostgreSQL 16 + PostGIS</b><br/>[Container: SQL Database]<br/>Лоти, одиниці, замовлення,<br/>користувачі, геодані")]
+    redis[("<b>Redis 7</b><br/>[Container: Pub/Sub, BullMQ]<br/>Черги задач, події, кеш")]
+    obs["<b>Observability</b><br/>[Container: Prometheus, Grafana, Loki]<br/>Метрики, логи, SLO-панелі"]
+  end
 
-  System_Boundary(b2c, "B2C-підсистема") {
-    Container(mobile, "Mobile App", "React Native, Expo", "Мапа, лоти, кошик, лімітні ордери")
-    Container(gw, "API Gateway", "Traefik v3", "TLS 1.3, маршрутизація, rate limiting")
-    Container(core, "Core API", "NestJS, TypeScript", "Auth, каталог, геопошук, інтеграція B2B, гейміфікація")
-    Container(trading, "Trading Service", "NestJS, TypeScript", "Резервування SKIP LOCKED, замовлення, лімітні ордери, оплата")
-    Container(worker, "Pricing Worker", "NestJS, BullMQ", "Price Decay, зіставлення ордерів із ціною, TTL резервів, outbox relay")
-    Container(rt, "Realtime Gateway", "NestJS, Socket.IO", "WebSocket-кімнати закладів")
-    ContainerDb(db, "PostgreSQL 16 + PostGIS", "SQL", "Лоти, одиниці, замовлення, користувачі, геодані")
-    ContainerQueue(redis, "Redis 7", "Pub/Sub, BullMQ", "Черги задач, pub/sub подій, кеш")
-    Container(obs, "Observability", "Prometheus, Grafana, Loki", "Метрики, логи, SLO-панелі")
-  }
+  consumer -- "Використовує" --> mobile
+  mobile -- "API-запити, підписка на зміни<br/>[REST / HTTPS, WSS]" --> gw
+  admin -- "Адмін-API (Swagger UI), Grafana<br/>[HTTPS]" --> gw
+  b2b -- "Потік лотів<br/>[REST / HTTPS + HMAC]" --> gw
+  pay -- "Callback оплати<br/>[HTTPS POST]" --> gw
 
-  Rel(consumer, mobile, "Використовує")
-  Rel(admin, gw, "Адмін-API (Swagger UI), Grafana", "HTTPS")
-  Rel(mobile, gw, "API-запити", "REST / HTTPS")
-  Rel(mobile, gw, "Підписка на зміни", "WSS")
-  Rel(b2b, gw, "Потік лотів", "REST / HTTPS + HMAC")
-  Rel(pay, gw, "Callback оплати", "HTTPS POST")
-  Rel(gw, core, "/auth, /lots, /venues, /integration", "REST / HTTP")
-  Rel(gw, trading, "/reservations, /orders, /limit-orders, /payments", "REST / HTTP")
-  Rel(gw, rt, "/ws", "WebSocket")
-  Rel(gw, obs, "/grafana", "HTTP")
-  Rel(core, db, "Читання/запис", "SQL / TCP 5432")
-  Rel(core, redis, "Кеш геопошуку, подія lot.created", "RESP / TCP 6379")
-  Rel(trading, db, "Транзакції SKIP LOCKED", "SQL / TCP 5432")
-  Rel(worker, db, "Пакетний UPDATE цін, outbox", "SQL / TCP 5432")
-  Rel(worker, redis, "Споживання задач, публікація подій", "RESP / TCP 6379")
-  Rel(trading, redis, "Задачі auto-reserve, події", "RESP / TCP 6379")
-  Rel(rt, redis, "Підписка на події, адаптер", "RESP / TCP 6379")
-  Rel(trading, pay, "Створення платежу", "REST / HTTPS")
-  Rel(worker, b2b, "Webhook підтвердження", "REST / HTTPS")
-  Rel(worker, push, "Push про виконання ордера", "REST / HTTPS")
-  Rel(obs, core, "Scrape /metrics", "HTTP")
-  Rel(obs, trading, "Scrape /metrics", "HTTP")
-  Rel(obs, worker, "Scrape /metrics", "HTTP")
-  Rel(obs, rt, "Scrape /metrics", "HTTP")
+  gw -- "/auth, /lots, /venues, /integration<br/>[REST / HTTP]" --> core
+  gw -- "/reservations, /orders,<br/>/limit-orders, /payments<br/>[REST / HTTP]" --> trading
+  gw -- "/ws<br/>[WebSocket]" --> rt
+  gw -- "/grafana<br/>[HTTP]" --> obs
 
-  UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="1")
+  core -- "Читання / запис<br/>[SQL / TCP 5432]" --> db
+  core -- "Кеш геопошуку, подія lot.created<br/>[RESP / TCP 6379]" --> redis
+  trading -- "Транзакції SKIP LOCKED<br/>[SQL / TCP 5432]" --> db
+  trading -- "Задачі auto-reserve, події<br/>[RESP / TCP 6379]" --> redis
+  worker -- "Пакетний UPDATE цін, outbox<br/>[SQL / TCP 5432]" --> db
+  worker -- "Споживання задач, публікація подій<br/>[RESP / TCP 6379]" --> redis
+  rt -- "Підписка на події, адаптер<br/>[RESP / TCP 6379]" --> redis
+
+  trading -- "Створення платежу<br/>[REST / HTTPS]" --> pay
+  worker -- "Webhook підтвердження<br/>[REST / HTTPS]" --> b2b
+  worker -- "Push про виконання ордера<br/>[REST / HTTPS]" --> push
+
+  core -. "Метрики (pull)<br/>[HTTP /metrics]" .-> obs
+  trading -. "Метрики (pull)<br/>[HTTP /metrics]" .-> obs
+  worker -. "Метрики (pull)<br/>[HTTP /metrics]" .-> obs
+  rt -. "Метрики (pull)<br/>[HTTP /metrics]" .-> obs
+
+  classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+  classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
+  classDef external fill:#8a8a8a,stroke:#5e5e5e,color:#ffffff
+  class consumer,admin person
+  class mobile,gw,core,trading,rt,worker,db,redis,obs container
+  class b2b,pay,push external
+  style b2c fill:#ffffff,stroke:#444444,stroke-dasharray:6 4,color:#222222
 ```
 
 **Опис контейнерів і трасування вимог (Level 2):**
@@ -134,70 +155,89 @@ WebSocket; доступ до сховищ — SQL / TCP 5432 та RESP / TCP 637
 ордерів.
 
 ```mermaid
-C4Component
-  title C4 Level 3 — Component Diagram: Trading Service (NestJS)
+%%{init: {"flowchart": {"nodeSpacing": 70, "rankSpacing": 80, "wrappingWidth": 240, "padding": 12}}}%%
+flowchart TB
+  gw["<b>API Gateway</b><br/>[Container: Traefik v3]"]
+  redisIn[("<b>Redis 7</b><br/>[Container: BullMQ]")]
 
-  Container(gw, "API Gateway", "Traefik v3")
-  ContainerQueue(redis, "Redis 7", "BullMQ, Pub/Sub")
-  ContainerDb(db, "PostgreSQL 16", "SQL")
-  System_Ext(pay, "LiqPay (sandbox)")
+  subgraph trading["Trading Service [Container: NestJS]"]
+    subgraph pipeline["Конвеєр обробки запиту (cross-cutting)"]
+      telemetry["<b>TelemetryInterceptor</b><br/>[Component: pino, prom-client]<br/>Логи з correlation-id, метрики RED"]
+      guard["<b>JwtAuthGuard</b><br/>[Component: NestJS Guard]<br/>Верифікація JWT RS256, RBAC"]
+      idem["<b>IdempotencyInterceptor</b><br/>[Component: NestJS Interceptor]<br/>Ключ Idempotency-Key"]
+      pipe["<b>ValidationPipe</b><br/>[Component: class-validator]<br/>Валідація DTO"]
+    end
 
-  Container_Boundary(trading, "Trading Service") {
-    Component(guard, "JwtAuthGuard", "NestJS Guard", "Верифікація JWT RS256, ролі RBAC")
-    Component(pipe, "ValidationPipe", "class-validator", "Валідація DTO")
-    Component(idem, "IdempotencyInterceptor", "NestJS Interceptor", "Ключ Idempotency-Key")
-    Component(filter, "GlobalExceptionFilter", "NestJS Filter", "Помилки у форматі RFC 9457")
-    Component(telemetry, "TelemetryInterceptor", "pino, prom-client", "Логи з correlation-id, метрики RED")
+    subgraph inbound["Вхідний шар"]
+      resCtl["<b>ReservationController</b><br/>[Component: REST]<br/>POST /reservations"]
+      loCtl["<b>LimitOrderController</b><br/>[Component: REST]<br/>POST / DELETE /limit-orders"]
+      payCtl["<b>PaymentCallbackController</b><br/>[Component: REST]<br/>POST /payments/callback"]
+      autoRes["<b>AutoReserveConsumer</b><br/>[Component: BullMQ Processor]<br/>Задачі limit-order.triggered"]
+    end
 
-    Component(resCtl, "ReservationController", "REST", "POST /reservations")
-    Component(loCtl, "LimitOrderController", "REST", "POST/DELETE /limit-orders")
-    Component(payCtl, "PaymentCallbackController", "REST", "POST /payments/callback")
-    Component(consumer, "AutoReserveConsumer", "BullMQ Processor", "Задачі limit-order.triggered")
+    subgraph app["Шар застосунку та домену"]
+      reserveUC["<b>ReserveLotUnitUseCase</b><br/>[Component: Application Service]<br/>Атомарне резервування"]
+      loUC["<b>LimitOrderService</b><br/>[Component: Application Service]<br/>Створення та скасування ордерів"]
+      payUC["<b>ConfirmPaymentUseCase</b><br/>[Component: Application Service]<br/>Ідемпотентне підтвердження оплати"]
+      domain["<b>Domain Model</b><br/>[Component: TypeScript]<br/>Reservation, Order, LimitOrder"]
+      filter["<b>GlobalExceptionFilter</b><br/>[Component: NestJS Filter]<br/>Помилки у форматі RFC 9457"]
+    end
 
-    Component(reserveUC, "ReserveLotUnitUseCase", "Application Service", "Атомарне резервування")
-    Component(loUC, "LimitOrderService", "Application Service", "Створення та скасування ордерів")
-    Component(payUC, "ConfirmPaymentUseCase", "Application Service", "Ідемпотентне підтвердження оплати")
-    Component(domain, "Domain Model", "TypeScript", "Reservation, Order, LimitOrder, інваріанти")
+    subgraph outbound["Шар інфраструктури (порти та адаптери)"]
+      uow["<b>UnitOfWork</b><br/>[Component: Port + TypeORM]<br/>Межі транзакції"]
+      unitRepo["<b>LotUnitRepository</b><br/>[Component: Port + SQL]<br/>SELECT FOR UPDATE SKIP LOCKED"]
+      orderRepo["<b>OrderRepository</b><br/>[Component: Port + TypeORM]<br/>Замовлення та outbox"]
+      loRepo["<b>LimitOrderRepository</b><br/>[Component: Port + TypeORM]<br/>Лімітні ордери"]
+      payClient["<b>PaymentGatewayClient</b><br/>[Component: Port + HTTPS]<br/>Платіж, перевірка підпису"]
+      events["<b>EventPublisher</b><br/>[Component: Port + Redis]<br/>Події lot.stock_updated"]
+    end
+  end
 
-    Component(uow, "UnitOfWork", "Port + TypeORM adapter", "Межі транзакції")
-    Component(unitRepo, "LotUnitRepository", "Port + SQL adapter", "SELECT FOR UPDATE SKIP LOCKED")
-    Component(orderRepo, "OrderRepository", "Port + TypeORM adapter", "Замовлення та outbox")
-    Component(loRepo, "LimitOrderRepository", "Port + TypeORM adapter", "Лімітні ордери")
-    Component(payClient, "PaymentGatewayClient", "Port + HTTPS adapter", "Створення платежу, перевірка підпису")
-    Component(events, "EventPublisher", "Port + Redis adapter", "Події lot.stock_updated")
-  }
+  db[("<b>PostgreSQL 16</b><br/>[Container: SQL Database]")]
+  redisOut[("<b>Redis 7</b><br/>[Container: Pub/Sub]")]
+  pay["<b>LiqPay (sandbox)</b><br/>[External System]"]
 
-  Rel(gw, telemetry, "Вхідний запит", "REST / HTTP")
-  Rel(telemetry, guard, "Запит з correlation-id", "NestJS pipeline")
-  Rel(guard, idem, "Автентифікований запит", "NestJS pipeline")
-  Rel(idem, pipe, "Новий ключ ідемпотентності", "NestJS pipeline")
-  Rel(pipe, resCtl, "Валідований DTO", "NestJS pipeline")
-  Rel(pipe, loCtl, "Валідований DTO", "NestJS pipeline")
-  Rel(gw, payCtl, "Callback LiqPay", "REST / HTTP")
-  Rel(redis, consumer, "Задача auto-reserve", "BullMQ / RESP")
+  gw -- "Вхідний запит<br/>[REST / HTTP]" --> telemetry
+  telemetry -- "Запит з correlation-id" --> guard
+  guard -- "Автентифікований запит" --> idem
+  idem -- "Новий ключ ідемпотентності" --> pipe
+  pipe -- "Валідований DTO" --> resCtl
+  pipe -- "Валідований DTO" --> loCtl
+  gw -- "Callback LiqPay<br/>[REST / HTTP]" --> payCtl
+  redisIn -- "Задача auto-reserve<br/>[BullMQ / RESP]" --> autoRes
 
-  Rel(resCtl, reserveUC, "Виклик через інтерфейс", "DI")
-  Rel(consumer, reserveUC, "Виклик через інтерфейс", "DI")
-  Rel(loCtl, loUC, "Виклик через інтерфейс", "DI")
-  Rel(payCtl, payUC, "Виклик через інтерфейс", "DI")
+  resCtl -- "Інтерфейс [DI]" --> reserveUC
+  autoRes -- "Інтерфейс [DI]" --> reserveUC
+  loCtl -- "Інтерфейс [DI]" --> loUC
+  payCtl -- "Інтерфейс [DI]" --> payUC
 
-  Rel(reserveUC, domain, "Інваріанти резерву", "in-process")
-  Rel(reserveUC, uow, "BEGIN/COMMIT", "DI")
-  Rel(reserveUC, unitRepo, "lockFirstAvailable()", "DI")
-  Rel(reserveUC, orderRepo, "save() + outbox", "DI")
-  Rel(reserveUC, events, "publish()", "DI")
-  Rel(payUC, payClient, "verifySignature()", "DI")
-  Rel(payUC, orderRepo, "markPaid()", "DI")
-  Rel(loUC, loRepo, "save() / cancel()", "DI")
-  Rel(reserveUC, filter, "DomainException", "throw / NestJS exception layer")
+  reserveUC -- "Інваріанти резерву" --> domain
+  reserveUC -. "DomainException" .-> filter
+  reserveUC -- "BEGIN / COMMIT [DI]" --> uow
+  reserveUC -- "lockFirstAvailable() [DI]" --> unitRepo
+  reserveUC -- "save() + outbox [DI]" --> orderRepo
+  reserveUC -- "publish() [DI]" --> events
+  loUC -- "save() / cancel() [DI]" --> loRepo
+  payUC -- "markPaid() [DI]" --> orderRepo
+  payUC -- "verifySignature() [DI]" --> payClient
 
-  Rel(unitRepo, db, "SQL", "TCP 5432")
-  Rel(orderRepo, db, "SQL", "TCP 5432")
-  Rel(loRepo, db, "SQL", "TCP 5432")
-  Rel(events, redis, "PUBLISH", "RESP / TCP 6379")
-  Rel(payClient, pay, "Створення платежу", "REST / HTTPS")
+  unitRepo -- "[SQL / TCP 5432]" --> db
+  orderRepo -- "[SQL / TCP 5432]" --> db
+  loRepo -- "[SQL / TCP 5432]" --> db
+  events -- "PUBLISH<br/>[RESP / TCP 6379]" --> redisOut
+  payClient -- "Створення платежу<br/>[REST / HTTPS]" --> pay
 
-  UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="1")
+  classDef component fill:#85bbf0,stroke:#5d82a8,color:#000000
+  classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
+  classDef external fill:#8a8a8a,stroke:#5e5e5e,color:#ffffff
+  class telemetry,guard,idem,pipe,resCtl,loCtl,payCtl,autoRes,reserveUC,loUC,payUC,domain,filter,uow,unitRepo,orderRepo,loRepo,payClient,events component
+  class gw,redisIn,db,redisOut container
+  class pay external
+  style trading fill:#ffffff,stroke:#444444,stroke-dasharray:6 4,color:#222222
+  style pipeline fill:#f4f8fc,stroke:#9bb7d4,color:#222222
+  style inbound fill:#f4f8fc,stroke:#9bb7d4,color:#222222
+  style app fill:#f4f8fc,stroke:#9bb7d4,color:#222222
+  style outbound fill:#f4f8fc,stroke:#9bb7d4,color:#222222
 ```
 
 ### 2.2.2. Опис компонентів
