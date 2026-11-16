@@ -10,7 +10,9 @@
 - [1_analysis.md](./1_analysis.md) — Розділ 1: аналіз предметної
   області, аналоги, модель As-Is/To-Be, вимоги
 - [srs.md](./srs.md) — Специфікація вимог (ISO/IEC/IEEE 29148)
-- [2_design.md](./2_design.md) — Розділ 2: C4 Model (Levels 1–3), трасування вимог
+- [2_design.md](./2_design.md) — Розділ 2: C4 Model (Levels 1–3), модель даних,
+  API-контракти, алгоритми критичних вузлів, інтеграційний аудит
+- [api/openapi.yaml](./api/openapi.yaml) — OpenAPI 3.0.3 контракт Core API та Trading Service
 - [adr/](./adr/) — Architecture Decision Records
   - [ADR-001: контроль конкурентного бронювання](./adr/0001-choice-of-technology.md)
 - [3_implementation.md](./3_implementation.md) — Розділ 3: інтерфейс,
@@ -42,7 +44,7 @@
 | № | Етап | Термін | Статус |
 |---|------|--------|--------|
 | 1 | Аналіз аналогів, науковий апарат, вимоги (Розділ 1) | Жовтень 2026 | Done |
-| 2 | Архітектура (UML/C4), SRS, ADR, схема БД | Листопад 2026 | In Progress |
+| 2 | Проєктування архітектури, баз даних та алгоритмів (C4, SRS, ADR, ERD, API) | Листопад 2026 | Done |
 | 3 | Алгоритмізація критичних вузлів | Грудень 2026 | To Do |
 | 4 | Core API, автентифікація, контракт | Січень 2027 | To Do |
 | 5 | Геодані (PostGIS) і real-time клієнт | Лютий 2027 | To Do |
