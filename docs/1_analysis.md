@@ -2,7 +2,7 @@
 
 > Підрозділ 1.1 (актуальність) і науковий апарат наведено у
 > [0_intro.md](./0_intro.md). Зведений монолітний документ Розділу 1 —
-> див. посилання у [README.md](./README.md#розділ-1-хмарний-документ).
+> див. посилання у [README.md](./README.md#cloud-doc).
 
 ## 1.2. Огляд сучасних підходів до вирішення задач дослідження
 
@@ -304,23 +304,28 @@ push-сповіщення без актуальної ціни.
 ### 1.5.2. Функціональні вимоги (Core Features)
 
 **Модуль Integration (Core API)**
+
 - **CF-1.** Приймати потік лотів від B2B-системи через REST з перевіркою
   HMAC-SHA256 підпису та ідемпотентним upsert.
 
 **Модуль Auth (Core API)**
+
 - **CF-2.** Реєструвати та автентифікувати користувача з видачею
   access JWT (RS256, 15 хв) і ротацією refresh-токена.
 
 **Модуль Geo (Core API)**
+
 - **CF-3.** Шукати заклади з активними лотами в заданому радіусі та
   кластеризувати їх для мапи (`ST_ClusterDBSCAN`).
 
 **Модуль Pricing (Pricing Worker)**
+
 - **CF-4.** Перераховувати ціну кожного активного лота за функцією
   Price Decay за розкладом (інтервал 60 с) та знімати з продажу лоти
   з вичерпаним `expires_at`.
 
 **Модуль Booking (Trading Service)**
+
 - **CF-5.** Резервувати одиницю лота атомарно через `SELECT FOR UPDATE
   SKIP LOCKED` з TTL резерву та автоматичним звільненням після його
   спливу.
@@ -329,10 +334,12 @@ push-сповіщення без актуальної ціни.
   підтвердження продажу B2B-системі.
 
 **Модуль Limit Orders (Trading Service + Pricing Worker)**
+
 - **CF-7.** Створювати та скасовувати лімітний ордер з пороговою ціною
   і автоматично виконувати резервування при досягненні порога.
 
 **Модуль Realtime (Realtime Gateway)**
+
 - **CF-8.** Транслювати оновлення ціни та залишку лота підписаним
   клієнтам через WebSocket-кімнати.
 
@@ -425,8 +432,8 @@ C4 Model та фіксація архітектурних рішень стан�
 4. UNEP. Food Waste Index Report 2024. Think Eat Save: Tracking
    Progress to Halve Global Food Waste. Nairobi: United Nations
    Environment Programme, 2024. URL:
-   https://www.unep.org/resources/publication/food-waste-index-report-2024
+   <https://www.unep.org/resources/publication/food-waste-index-report-2024>
 5. Directive (EU) 2025/1892 of the European Parliament and of the
    Council amending Directive 2008/98/EC on waste. Official Journal of
    the European Union, 2025. URL:
-   https://eur-lex.europa.eu/eli/dir/2025/1892/oj
+   <https://eur-lex.europa.eu/eli/dir/2025/1892/oj>

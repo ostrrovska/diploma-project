@@ -1,5 +1,7 @@
 # F2 Diploma Project — Документація
 
+[![Docs Quality Gate](https://github.com/ostrrovska/diploma-project/actions/workflows/docs-linter.yml/badge.svg)](https://github.com/ostrrovska/diploma-project/actions/workflows/docs-linter.yml)
+
 Кваліфікаційна робота: Алгоритми динамічного ціноутворення та
 конкурентного бронювання в B2C-маркетплейсі (Тема 1).
 
@@ -10,8 +12,10 @@
 - [1_analysis.md](./1_analysis.md) — Розділ 1: аналіз предметної
   області, аналоги, модель As-Is/To-Be, вимоги
 - [srs.md](./srs.md) — Специфікація вимог (ISO/IEC/IEEE 29148)
-- [2_design.md](./2_design.md) — Розділ 2: C4 Model (Levels 1–3), модель даних,
-  API-контракти, алгоритми критичних вузлів, інтеграційний аудит
+- [2_design.md](./2_design.md) — Розділ 2: обґрунтування архітектури, C4 Model
+  (Levels 1–3), серверне ядро й алгоритми, Application Security, API-контракти
+  й топологія маршрутів, Use Cases, модель даних, інтеграційний аудит
+- [uml/](./uml/) — модель прецедентів StarUML і експорт діаграми
 - [api/openapi.yaml](./api/openapi.yaml) — OpenAPI 3.0.3 контракт Core API та Trading Service
 - [adr/](./adr/) — Architecture Decision Records
   - [ADR-001: контроль конкурентного бронювання](./adr/0001-choice-of-technology.md)
@@ -19,11 +23,16 @@
   тестування, розгортання
 - [4_conclusions.md](./4_conclusions.md) — Висновки
 
-## Розділ 1: хмарний документ
+<a id="cloud-doc"></a>
 
-- Google Docs (режим «Can comment»):
+## Розділи 1–2: хмарний документ
+
+- Google Docs (режим «Can comment»), зведений моноліт Розділів 1 і 2:
   [F2_Diploma_Chapter1_Островська](https://docs.google.com/document/d/1EwixeDArLG5G-ovrnhtMRpU1IpkZDBvtJdm_MuYVbyE/edit?usp=sharing)
-- Локальна копія: [F2_Diploma_Chapter1_Ostrovska.docx](./chapters/F2_Diploma_Chapter1_Ostrovska.docx)
+- Локальні копії: [Розділ 1](./chapters/F2_Diploma_Chapter1_Ostrovska.docx),
+  [Розділи 1–2](./chapters/F2_Diploma_Chapters1-2_Ostrovska.docx)
+- Конвеєр контролю якості документації:
+  [Docs Quality Gate](https://github.com/ostrrovska/diploma-project/actions/workflows/docs-linter.yml)
 
 ## Матриця нефункціональних вимог (NFRs)
 
