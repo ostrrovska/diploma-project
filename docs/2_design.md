@@ -250,7 +250,7 @@ flowchart TB
   redisIn[("<b>Redis 7</b><br/>[Container: BullMQ]")]
 
   subgraph trading["Trading Service [Container: NestJS]"]
-    subgraph pipeline["Конвеєр запиту (cross-cutting)"]
+    subgraph pipeline["Конвеєр запиту"]
       telemetry["<b>TelemetryInterceptor</b><br/>[Component]<br/>correlation-id, метрики"]
       guard["<b>JwtAuthGuard</b><br/>[Component]<br/>JWT RS256, RBAC"]
       idem["<b>IdempotencyInterceptor</b><br/>[Component]<br/>Idempotency-Key"]
@@ -264,7 +264,7 @@ flowchart TB
       autoRes["<b>AutoReserveConsumer</b><br/>[Component: BullMQ]"]
     end
 
-    subgraph app["Шар застосунку та домену"]
+    subgraph app["Застосунок і домен"]
       reserveUC["<b>ReserveLotUnitUseCase</b><br/>[Component]<br/>Атомарне резервування"]
       loUC["<b>LimitOrderService</b><br/>[Component]<br/>Ордери"]
       payUC["<b>ConfirmPaymentUseCase</b><br/>[Component]<br/>Підтвердження оплати"]
@@ -272,7 +272,7 @@ flowchart TB
       filter["<b>GlobalExceptionFilter</b><br/>[Component]<br/>RFC 9457"]
     end
 
-    subgraph outbound["Шар інфраструктури (порти та адаптери)"]
+    subgraph outbound["Порти та адаптери"]
       uow["<b>UnitOfWork</b><br/>[Port + TypeORM]"]
       unitRepo["<b>LotUnitRepository</b><br/>[Port + SQL]<br/>SKIP LOCKED"]
       orderRepo["<b>OrderRepository</b><br/>[Port + TypeORM]<br/>+ outbox"]
