@@ -47,7 +47,7 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 ### SRS-FUN-02
 
 **Integration, M.** Система повинна виконувати ідемпотентний upsert лота
-за ключем `(merchant_id, external_lot_id)` і створювати `quantity`
+за ключем `(venue_external_id, external_lot_id)` і створювати `quantity`
 записів `LotUnit` у статусі `available` в одній транзакції.
 
 ### SRS-FUN-03
@@ -159,7 +159,7 @@ HMAC-SHA256 підпис у заголовку `X-Signature` не збігаєт
 
 | ID | Категорія | Вимога | Межа |
 |---|---|---|---|
-| <a id="srs-nfr-perf-01"></a>SRS-NFR-PERF-01 | Продуктивність | Час відгуку `GET /lots/nearby` | p95 ≤ 150 мс при 300 RPS протягом 10 хв |
+| <a id="srs-nfr-perf-01"></a>SRS-NFR-PERF-01 | Продуктивність | Час відгуку `GET /api/v1/lots` (пошук за радіусом) | p95 ≤ 150 мс при 300 RPS протягом 10 хв |
 | <a id="srs-nfr-perf-02"></a>SRS-NFR-PERF-02 | Продуктивність | Час відгуку `POST /reservations` | p95 ≤ 250 мс при 200 одночасних VU на один лот |
 | <a id="srs-nfr-perf-03"></a>SRS-NFR-PERF-03 | Реальний час | Затримка від запису ціни до отримання клієнтом | p95 ≤ 2 с при 5 000 з'єднань і 50 подіях/с |
 | <a id="srs-nfr-perf-04"></a>SRS-NFR-PERF-04 | Продуктивність | Цикл перерахунку цін | ≤ 10 с для 10 000 активних лотів |
