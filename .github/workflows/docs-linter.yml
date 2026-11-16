@@ -1,0 +1,48 @@
+name: Docs Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - '.markdownlint.json'
+      - '.redocly.yaml'
+      - '.github/workflows/docs-linter.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  markdownlint:
+    name: Markdown lint (docs/)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run markdownlint-cli2
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          config: .markdownlint.json
+          globs: |
+            docs/**/*.md
+            README.md
+
+  openapi:
+    name: OpenAPI contract lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Lint docs/api/openapi.yaml (Redocly CLI)
+        run: npx --yes @redocly/cli@1.34.3 lint docs/api/openapi.yaml --config .redocly.yaml
