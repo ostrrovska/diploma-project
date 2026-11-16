@@ -1,0 +1,575 @@
+openapi: 3.0.3
+info:
+  title: B2C Marketplace API (Core API + Trading Service)
+  version: 1.0.0
+  description: |
+    Міжсервісні контракти B2C-підсистеми маркетплейсу (Тема 1).
+    Усі запити проходять через API Gateway (Traefik v3, TLS 1.3).
+
+    * `/api/v1/lots`, `/integration/v1/lots` — контейнер Core API.
+    * `/api/v1/reservations`, `/api/v1/orders`, `/api/v1/limit-orders`,
+      `/api/v1/payments/liqpay/callback` — контейнер Trading Service.
+
+    Грошові суми передаються в мінімальних одиницях валюти (копійках)
+    як цілі числа (`*_minor`), валюта — код ISO 4217. Мітки часу —
+    RFC 3339 у UTC. Помилки — формат RFC 9457 (Problem Details).
+    Трасування на вимоги: [srs.md](../srs.md).
+  license:
+    name: Proprietary (qualification work)
+servers:
+  - url: https://api.b2c-marketplace.local
+    description: API Gateway (локальне розгортання, Docker Compose)
+tags:
+  - name: Lots
+    description: Пошук лотів (Core API)
+  - name: Integration
+    description: Прийом потоку лотів від B2B-системи (Core API)
+  - name: Reservations
+    description: Атомарне резервування одиниці лота (Trading Service)
+  - name: Orders
+    description: Замовлення (Trading Service)
+  - name: LimitOrders
+    description: Лімітні ордери (Trading Service)
+  - name: Payments
+    description: Callback платіжного провайдера (Trading Service)
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/lots:
+    get:
+      tags: [Lots]
+      operationId: listLotsNearby
+      summary: Пошук активних лотів у радіусі від точки
+      description: |
+        Повертає активні лоти закладів у радіусі `radius_km` від точки
+        (`ST_DWithin` з GiST-індексом), відсортовані за відстанню.
+        Координати округлюються клієнтом до 3 знаків після коми (~110 м);
+        API Gateway не записує query-рядок у журнал доступу
+        (SRS-NFR-COMP-01).
+        Вимоги: SRS-FUN-05, SRS-NFR-PERF-01.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number, format: double, minimum: -90, maximum: 90 }
+        - name: lon
+          in: query
+          required: true
+          schema: { type: number, format: double, minimum: -180, maximum: 180 }
+        - name: radius_km
+          in: query
+          required: false
+          schema: { type: number, format: double, minimum: 0.5, maximum: 10, default: 3 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, format: int32, minimum: 1, maximum: 100, default: 20 }
+        - name: cursor
+          in: query
+          required: false
+          description: Непрозорий курсор пагінації з попередньої відповіді.
+          schema: { type: string, maxLength: 128 }
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Сторінка лотів
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LotPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /integration/v1/lots:
+    post:
+      tags: [Integration]
+      operationId: upsertLotFromFeed
+      summary: Ідемпотентний upsert лота з B2B-системи
+      description: |
+        Ключ ідемпотентності — пара (`venue_external_id`, `external_lot_id`).
+        Підпис `X-Signature` = HMAC-SHA256(secret, `X-Request-Timestamp` + "." + body).
+        Захист від повторного відтворення: запит із `X-Request-Timestamp`, що
+        відрізняється від серверного часу більш ніж на 300 с, або з підписом,
+        уже обробленим протягом цього вікна (кеш Redis `SET NX EX 600`),
+        відхиляється з кодом 401. Вимоги: SRS-FUN-01, SRS-FUN-02.
+      security:
+        - b2bHmac: []
+      parameters:
+        - name: X-Request-Timestamp
+          in: header
+          required: true
+          description: Unix-час відправлення (секунди); допустиме відхилення ±300 с.
+          schema: { type: integer, format: int64 }
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LotFeedItem' }
+      responses:
+        '200':
+          description: Лот оновлено (повторне надходження того самого ключа)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LotUpsertResult' }
+        '201':
+          description: Лот створено, одиниці `lot_units` згенеровано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LotUpsertResult' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: Заклад з `venue_external_id` не зареєстровано
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '409':
+          description: Нова кількість менша за кількість уже зарезервованих або проданих одиниць
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/reservations:
+    post:
+      tags: [Reservations]
+      operationId: createReservation
+      summary: Атомарно зарезервувати одну одиницю лота
+      description: |
+        Резервування виконується однією транзакцією `SELECT … FOR UPDATE SKIP LOCKED`
+        (ADR-001), фіксує поточну ціну та створює замовлення у статусі
+        `pending_payment` з TTL 10 хв. Вимоги: SRS-FUN-09, SRS-FUN-10,
+        SRS-NFR-CONS-01, SRS-NFR-PERF-02.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservationRequest' }
+      responses:
+        '201':
+          description: Одиницю зарезервовано, замовлення створено
+          headers:
+            Location:
+              description: URI створеного замовлення
+              schema: { type: string, example: /api/v1/orders/7d3f6a54-2c1b-4f0e-9a8e-1f2b3c4d5e6f }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Вільних одиниць немає (`type` = `.../errors/sold-out`) або ключ
+            ідемпотентності вже використано з іншим тілом запиту
+            (`.../errors/idempotency-conflict`).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '410':
+          description: Лот прострочено або знято з продажу
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/orders/{order_id}:
+    get:
+      tags: [Orders]
+      operationId: getOrder
+      summary: Отримати замовлення поточного користувача
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Замовлення
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/limit-orders:
+    post:
+      tags: [LimitOrders]
+      operationId: createLimitOrder
+      summary: Створити лімітний ордер на лот
+      description: |
+        Один активний ордер на пару (користувач, лот). Ордер виконується
+        Pricing Worker, коли `current_price_minor <= threshold_price_minor`.
+        Вимоги: SRS-FUN-13, SRS-FUN-14.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LimitOrderRequest' }
+      responses:
+        '201':
+          description: Ордер створено
+          headers:
+            Location:
+              description: URI ордера
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LimitOrder' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Для цього лота вже існує активний ордер користувача
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '410':
+          description: Лот прострочено або знято з продажу
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/limit-orders/{limit_order_id}:
+    delete:
+      tags: [LimitOrders]
+      operationId: cancelLimitOrder
+      summary: Скасувати активний лімітний ордер
+      parameters:
+        - name: limit_order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '204':
+          description: Ордер скасовано
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Ордер уже виконується або завершений (`triggered`, `executed`, `expired`, `failed`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/payments/liqpay/callback:
+    post:
+      tags: [Payments]
+      operationId: handleLiqPayCallback
+      summary: Callback LiqPay про статус оплати
+      description: |
+        Автентичність підтверджується підписом
+        `signature = base64(sha1(private_key + data + private_key))`; JWT не
+        застосовується. Повторний callback для того самого `payment_id`
+        не змінює стан (ідемпотентність). Вимоги: SRS-FUN-11, SRS-FUN-12.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/LiqPayCallback' }
+      responses:
+        '200':
+          description: Callback оброблено (зокрема повторний)
+        '400':
+          description: Невалідний підпис або структура `data`
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access JWT, підпис RS256, строк дії 15 хв (SRS-FUN-04, SRS-NFR-SEC-01).
+    b2bHmac:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: HMAC-SHA256 підпис тіла запиту B2B-системи (SRS-FUN-01).
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID v4; повтор із тим самим ключем і тілом повертає збережену відповідь (TTL 24 год).
+      schema: { type: string, format: uuid }
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Ідентифікатор трасування запиту (SRS-NFR-OBS-01).
+      schema: { type: string, maxLength: 64, pattern: '^[A-Za-z0-9-]{1,64}$' }
+
+  headers:
+    CorrelationId:
+      description: Ідентифікатор трасування запиту.
+      schema: { type: string, maxLength: 64, pattern: '^[A-Za-z0-9-]{1,64}$' }
+    RetryAfter:
+      description: Кількість секунд до повторної спроби.
+      schema: { type: integer, format: int32, minimum: 1 }
+    RateLimitLimit:
+      description: Ліміт запитів у вікні (100/хв на користувача, 10/хв для резервувань).
+      schema: { type: integer, format: int32 }
+    RateLimitRemaining:
+      description: Кількість запитів, що лишилися у вікні.
+      schema: { type: integer, format: int32 }
+
+  responses:
+    ValidationError:
+      description: Помилка валідації вхідних даних
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ValidationProblem' }
+    Unauthorized:
+      description: Відсутній або невалідний токен / підпис
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    PayloadTooLarge:
+      description: Тіло запиту перевищує ліміт API Gateway (16 KiB для `/api/v1`, 64 KiB для `/integration/v1`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: |
+        Ресурс не знайдено або він належить іншому користувачу. Відповідь
+        однакова в обох випадках, щоб унеможливити перебір ідентифікаторів
+        (OWASP API1:2023 BOLA).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests:
+      description: Перевищено ліміт запитів (SRS-FUN-16)
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+        RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+        RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ServiceUnavailable:
+      description: Тимчасова недоступність СУБД; запит можна повторити з тим самим Idempotency-Key
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InternalError:
+      description: Внутрішня помилка сервера
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri, example: 'https://api.b2c-marketplace.local/errors/sold-out' }
+        title: { type: string, maxLength: 200 }
+        status: { type: integer, format: int32, minimum: 400, maximum: 599 }
+        detail: { type: string, maxLength: 1000 }
+        instance: { type: string, maxLength: 200 }
+        correlation_id: { type: string, maxLength: 64 }
+
+    ValidationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field: { type: string, example: radius_km }
+                  message: { type: string, example: must be <= 10 }
+
+    LotStatus:
+      type: string
+      enum: [active, sold_out, expired, withdrawn]
+
+    OrderStatus:
+      type: string
+      enum: [pending_payment, paid, expired, cancelled, refunded]
+
+    LimitOrderStatus:
+      type: string
+      enum: [active, triggered, executed, cancelled, expired, failed]
+
+    Currency:
+      type: string
+      pattern: '^[A-Z]{3}$'
+      example: UAH
+
+    Lot:
+      type: object
+      required: [id, venue_id, venue_name, title, base_price_minor, current_price_minor, currency, available_units, expires_at, status, distance_m]
+      properties:
+        id: { type: string, format: uuid }
+        venue_id: { type: string, format: uuid }
+        venue_name: { type: string, maxLength: 120 }
+        title: { type: string, maxLength: 160 }
+        base_price_minor: { type: integer, format: int64, minimum: 1 }
+        current_price_minor: { type: integer, format: int64, minimum: 1 }
+        currency: { $ref: '#/components/schemas/Currency' }
+        available_units:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 50
+          description: Обчислюється як COUNT(lot_units WHERE status = 'available').
+        expires_at: { type: string, format: date-time }
+        price_updated_at: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/LotStatus' }
+        distance_m: { type: integer, format: int32, minimum: 0 }
+
+    LotPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/Lot' }
+        next_cursor:
+          type: string
+          nullable: true
+          maxLength: 128
+
+    LotFeedItem:
+      type: object
+      required: [venue_external_id, external_lot_id, title, base_price_minor, min_price_minor, currency, quantity, published_at, expires_at]
+      properties:
+        venue_external_id: { type: string, maxLength: 64 }
+        external_lot_id: { type: string, maxLength: 64 }
+        title: { type: string, minLength: 1, maxLength: 160 }
+        base_price_minor: { type: integer, format: int64, minimum: 1 }
+        min_price_minor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Має бути не більшим за `base_price_minor`.
+        currency: { $ref: '#/components/schemas/Currency' }
+        quantity: { type: integer, format: int32, minimum: 1, maximum: 50 }
+        published_at: { type: string, format: date-time }
+        expires_at:
+          type: string
+          format: date-time
+          description: Має бути пізнішим за `published_at`.
+
+    LotUpsertResult:
+      type: object
+      required: [lot_id, status, created_units]
+      properties:
+        lot_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/LotStatus' }
+        created_units: { type: integer, format: int32, minimum: 0 }
+
+    ReservationRequest:
+      type: object
+      required: [lot_id]
+      additionalProperties: false
+      properties:
+        lot_id: { type: string, format: uuid }
+
+    Reservation:
+      type: object
+      required: [order_id, lot_id, lot_unit_id, price_minor, currency, status, reserved_until]
+      properties:
+        order_id: { type: string, format: uuid }
+        lot_id: { type: string, format: uuid }
+        lot_unit_id: { type: string, format: uuid }
+        price_minor: { type: integer, format: int64, minimum: 1 }
+        currency: { $ref: '#/components/schemas/Currency' }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        reserved_until: { type: string, format: date-time }
+        checkout_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL hosted checkout LiqPay; null, якщо провайдер тимчасово недоступний.
+
+    Order:
+      type: object
+      required: [id, lot_id, lot_unit_id, price_minor, currency, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        lot_id: { type: string, format: uuid }
+        lot_unit_id: { type: string, format: uuid }
+        price_minor: { type: integer, format: int64, minimum: 1 }
+        currency: { $ref: '#/components/schemas/Currency' }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        reserved_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: Береться з `lot_units.reserved_until`; null після оплати або спливу TTL.
+        checkout_url: { type: string, format: uri, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    LimitOrderRequest:
+      type: object
+      required: [lot_id, threshold_price_minor]
+      additionalProperties: false
+      properties:
+        lot_id: { type: string, format: uuid }
+        threshold_price_minor: { type: integer, format: int64, minimum: 1 }
+        valid_until:
+          type: string
+          format: date-time
+          description: Не пізніше за `expires_at` лота; за замовчуванням — `expires_at`.
+
+    LimitOrder:
+      type: object
+      required: [id, lot_id, threshold_price_minor, status, valid_until, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        lot_id: { type: string, format: uuid }
+        threshold_price_minor: { type: integer, format: int64, minimum: 1 }
+        status: { $ref: '#/components/schemas/LimitOrderStatus' }
+        order_id: { type: string, format: uuid, nullable: true }
+        valid_until: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    LiqPayCallback:
+      type: object
+      required: [data, signature]
+      properties:
+        data:
+          type: string
+          description: Base64-кодований JSON з полями `payment_id`, `order_id`, `status`, `amount`, `currency`.
+          maxLength: 8192
+        signature:
+          type: string
+          description: Base64(SHA-1) підпис.
+          maxLength: 64
