@@ -43,6 +43,9 @@ paths:
       description: |
         Повертає активні лоти закладів у радіусі `radius_km` від точки
         (`ST_DWithin` з GiST-індексом), відсортовані за відстанню.
+        Координати округлюються клієнтом до 3 знаків після коми (~110 м);
+        API Gateway не записує query-рядок у журнал доступу
+        (SRS-NFR-COMP-01).
         Вимоги: SRS-FUN-05, SRS-NFR-PERF-01.
       parameters:
         - name: lat
@@ -88,7 +91,10 @@ paths:
       description: |
         Ключ ідемпотентності — пара (`venue_external_id`, `external_lot_id`).
         Підпис `X-Signature` = HMAC-SHA256(secret, `X-Request-Timestamp` + "." + body).
-        Вимоги: SRS-FUN-01, SRS-FUN-02.
+        Захист від повторного відтворення: запит із `X-Request-Timestamp`, що
+        відрізняється від серверного часу більш ніж на 300 с, або з підписом,
+        уже обробленим протягом цього вікна (кеш Redis `SET NX EX 600`),
+        відхиляється з кодом 401. Вимоги: SRS-FUN-01, SRS-FUN-02.
       security:
         - b2bHmac: []
       parameters:
@@ -115,6 +121,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/LotUpsertResult' }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: Заклад з `venue_external_id` не зареєстровано
@@ -158,6 +165,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Reservation' }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
@@ -194,7 +202,6 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Order' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
 
@@ -226,6 +233,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/LimitOrder' }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
@@ -256,7 +264,6 @@ paths:
         '204':
           description: Ордер скасовано
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: Ордер уже виконується або завершений (`triggered`, `executed`, `expired`, `failed`)
@@ -289,6 +296,7 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
 
 components:
@@ -316,12 +324,12 @@ components:
       in: header
       required: false
       description: Ідентифікатор трасування запиту (SRS-NFR-OBS-01).
-      schema: { type: string, maxLength: 64 }
+      schema: { type: string, maxLength: 64, pattern: '^[A-Za-z0-9-]{1,64}$' }
 
   headers:
     CorrelationId:
       description: Ідентифікатор трасування запиту.
-      schema: { type: string, maxLength: 64 }
+      schema: { type: string, maxLength: 64, pattern: '^[A-Za-z0-9-]{1,64}$' }
     RetryAfter:
       description: Кількість секунд до повторної спроби.
       schema: { type: integer, format: int32, minimum: 1 }
@@ -343,13 +351,16 @@ components:
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
-    Forbidden:
-      description: Ресурс належить іншому користувачу
+    PayloadTooLarge:
+      description: Тіло запиту перевищує ліміт API Gateway (16 KiB для `/api/v1`, 64 KiB для `/integration/v1`)
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     NotFound:
-      description: Ресурс не знайдено
+      description: |
+        Ресурс не знайдено або він належить іншому користувачу. Відповідь
+        однакова в обох випадках, щоб унеможливити перебір ідентифікаторів
+        (OWASP API1:2023 BOLA).
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
